@@ -41,6 +41,11 @@ where
                 let amount = tx.amount?;
                 Some(self.deposit.execute(tx.client, tx.tx, amount))
             }
+            TransactionType::Withdrawal => {
+                let amount = tx.amount?;
+                self.withdraw.execute(tx.client, tx.tx, amount).ok();
+                None
+            }
             _ => None,
         }
     }
@@ -93,5 +98,35 @@ mod tests {
         let account = manager.process(tx).unwrap();
         assert_eq!(account.client, 1);
         assert_eq!(account.available, amount("100.0"));
+    }
+
+    #[test]
+    fn routes_withdrawal_to_withdraw_use_case() {
+        let mut mock_withdraw = MockWithdraw::new();
+        mock_withdraw
+            .expect_execute()
+            .withf(|client_id, tx, amount| {
+                *client_id == 1 && *tx == 42 && *amount == "10.0".parse::<Amount>().unwrap()
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+
+        let mut manager = super::TransactionManager::new(
+            MockDeposit::new(),
+            mock_withdraw,
+            MockDisputeTx::new(),
+            MockResolve::new(),
+            MockChargeback::new(),
+        );
+
+        let tx = Transaction {
+            tx_type: TransactionType::Withdrawal,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("10.0")),
+        };
+
+        let result = manager.process(tx);
+        assert!(result.is_none());
     }
 }
