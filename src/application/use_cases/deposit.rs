@@ -92,4 +92,16 @@ mod tests {
         let account = use_case.repo().get(1).unwrap();
         assert_eq!(account.available, amount("75.5"));
     }
+
+    #[test]
+    fn deposits_to_separate_clients_independently() {
+        let repo = InMemoryAccountRepo::new();
+        let mut use_case = super::DepositUseCase::new(repo);
+
+        use_case.execute(1, amount("100.0"));
+        use_case.execute(2, amount("200.0"));
+
+        assert_eq!(use_case.repo().get(1).unwrap().available, amount("100.0"));
+        assert_eq!(use_case.repo().get(2).unwrap().available, amount("200.0"));
+    }
 }
