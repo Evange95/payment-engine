@@ -75,4 +75,21 @@ mod tests {
         assert_eq!(account.held, Amount::ZERO);
         assert!(!account.locked);
     }
+
+    #[test]
+    fn adds_to_existing_available_balance() {
+        let mut repo = InMemoryAccountRepo::new();
+        repo.save(Account {
+            client: 1,
+            available: amount("50.0"),
+            held: Amount::ZERO,
+            locked: false,
+        });
+        let mut use_case = super::DepositUseCase::new(repo);
+
+        use_case.execute(1, amount("25.5"));
+
+        let account = use_case.repo().get(1).unwrap();
+        assert_eq!(account.available, amount("75.5"));
+    }
 }
