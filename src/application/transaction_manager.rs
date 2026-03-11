@@ -58,9 +58,7 @@ mod tests {
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::{Transaction, TransactionType};
-    use crate::ports::{
-        MockChargeback, MockDeposit, MockDisputeTx, MockResolve, MockWithdraw,
-    };
+    use crate::ports::{MockChargeback, MockDeposit, MockDisputeTx, MockResolve, MockWithdraw};
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()

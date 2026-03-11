@@ -55,16 +55,14 @@ mod tests {
     #[test]
     fn increases_available_and_total() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| {
-                Some(crate::domain::account::Account {
-                    client: 1,
-                    available: amount("30.0"),
-                    held: amount("10.0"),
-                    locked: false,
-                })
-            });
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(crate::domain::account::Account {
+                client: 1,
+                available: amount("30.0"),
+                held: amount("10.0"),
+                locked: false,
+            })
+        });
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
@@ -80,9 +78,7 @@ mod tests {
     #[test]
     fn creates_account_on_first_deposit() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| None);
+        account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
@@ -99,16 +95,14 @@ mod tests {
     #[test]
     fn adds_to_existing_available_balance() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| {
-                Some(crate::domain::account::Account {
-                    client: 1,
-                    available: amount("50.0"),
-                    held: Amount::ZERO,
-                    locked: false,
-                })
-            });
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(crate::domain::account::Account {
+                client: 1,
+                available: amount("50.0"),
+                held: Amount::ZERO,
+                locked: false,
+            })
+        });
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
@@ -123,9 +117,7 @@ mod tests {
     #[test]
     fn deposits_to_separate_clients_independently() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| None);
+        account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
@@ -142,9 +134,7 @@ mod tests {
     #[test]
     fn saves_transaction_record() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| None);
+        account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();

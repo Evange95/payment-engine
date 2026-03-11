@@ -17,7 +17,11 @@ fn processes_transactions_and_outputs_account_balances() {
         .output()
         .expect("failed to run binary");
 
-    assert!(output.status.success(), "binary failed: {:?}", output.stderr);
+    assert!(
+        output.status.success(),
+        "binary failed: {:?}",
+        output.stderr
+    );
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     let mut lines: Vec<&str> = stdout.trim().lines().collect();

@@ -7,9 +7,7 @@ pub struct DisputeUseCase<A: AccountRepository, T: TransactionRepository, D: Dis
     dispute_repo: D,
 }
 
-impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
-    DisputeUseCase<A, T, D>
-{
+impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> DisputeUseCase<A, T, D> {
     pub fn new(account_repo: A, tx_repo: T, dispute_repo: D) -> Self {
         Self {
             account_repo,
@@ -145,9 +143,7 @@ mod tests {
     #[test]
     fn ignores_non_existent_account() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| None);
+        account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().times(0);
 
         let mut tx_repo = MockTransactionRepository::new();

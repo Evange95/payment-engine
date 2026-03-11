@@ -52,12 +52,7 @@ impl<A: AccountRepository, T: TransactionRepository> WithdrawalUseCase<A, T> {
 }
 
 impl<A: AccountRepository, T: TransactionRepository> Withdraw for WithdrawalUseCase<A, T> {
-    fn execute(
-        &mut self,
-        client_id: u16,
-        tx: u32,
-        amount: Amount,
-    ) -> Result<(), WithdrawalError> {
+    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Result<(), WithdrawalError> {
         self.execute(client_id, tx, amount)
     }
 }
@@ -86,7 +81,9 @@ mod tests {
         });
         account_repo
             .expect_save()
-            .withf(|a| a.available == "99.0".parse().unwrap() && a.total() == "109.0".parse().unwrap())
+            .withf(|a| {
+                a.available == "99.0".parse().unwrap() && a.total() == "109.0".parse().unwrap()
+            })
             .times(1)
             .returning(|_| ());
 
@@ -123,9 +120,7 @@ mod tests {
     #[test]
     fn fails_on_non_existent_account() {
         let mut account_repo = MockAccountRepository::new();
-        account_repo
-            .expect_find_by_client_id()
-            .returning(|_| None);
+        account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().times(0);
 
         let tx_repo = MockTransactionRepository::new();
@@ -142,7 +137,11 @@ mod tests {
         account_repo.expect_find_by_client_id().returning(|id| {
             Some(Account {
                 client: id,
-                available: if id == 1 { amount("100.0") } else { amount("200.0") },
+                available: if id == 1 {
+                    amount("100.0")
+                } else {
+                    amount("200.0")
+                },
                 held: Amount::ZERO,
                 locked: false,
             })

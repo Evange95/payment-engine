@@ -14,7 +14,6 @@ impl InMemoryAccountRepo {
             accounts: HashMap::new(),
         }
     }
-
 }
 
 impl AccountRepository for InMemoryAccountRepo {

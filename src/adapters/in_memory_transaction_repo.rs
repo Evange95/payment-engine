@@ -14,7 +14,6 @@ impl InMemoryTransactionRepo {
             transactions: HashMap::new(),
         }
     }
-
 }
 
 impl TransactionRepository for InMemoryTransactionRepo {

@@ -1,7 +1,5 @@
 use crate::domain::account::Account;
-use crate::ports::{
-    AccountRepository, DisputeRepository, Resolve, TransactionRepository,
-};
+use crate::ports::{AccountRepository, DisputeRepository, Resolve, TransactionRepository};
 
 pub struct ResolveUseCase<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> {
     account_repo: A,
@@ -9,9 +7,7 @@ pub struct ResolveUseCase<A: AccountRepository, T: TransactionRepository, D: Dis
     dispute_repo: D,
 }
 
-impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
-    ResolveUseCase<A, T, D>
-{
+impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> ResolveUseCase<A, T, D> {
     pub fn new(account_repo: A, tx_repo: T, dispute_repo: D) -> Self {
         Self {
             account_repo,

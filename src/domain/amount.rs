@@ -14,7 +14,6 @@ impl Amount {
     pub fn is_negative(&self) -> bool {
         self.0 < 0
     }
-
 }
 
 impl FromStr for Amount {

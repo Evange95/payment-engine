@@ -1,7 +1,5 @@
 use crate::domain::account::Account;
-use crate::ports::{
-    AccountRepository, Chargeback, DisputeRepository, TransactionRepository,
-};
+use crate::ports::{AccountRepository, Chargeback, DisputeRepository, TransactionRepository};
 
 pub struct ChargebackUseCase<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> {
     account_repo: A,
