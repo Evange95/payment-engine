@@ -8,6 +8,8 @@ use thiserror::Error;
 pub enum DepositError {
     #[error("account is frozen")]
     FrozenAccount,
+    #[error("duplicate transaction id")]
+    DuplicateTransaction,
 }
 
 pub struct DepositUseCase<A: AccountRepository, T: TransactionRepository> {
@@ -29,6 +31,10 @@ impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
         tx: u32,
         amount: Amount,
     ) -> Result<Account, DepositError> {
+        if self.tx_repo.find_by_tx_id(tx).is_some() {
+            return Err(DepositError::DuplicateTransaction);
+        }
+
         let mut account = self
             .account_repo
             .find_by_client_id(client_id)
@@ -87,6 +93,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
@@ -103,6 +110,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
@@ -127,6 +135,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
@@ -142,6 +151,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
@@ -165,10 +175,31 @@ mod tests {
         });
         account_repo.expect_save().times(0);
 
-        let tx_repo = MockTransactionRepository::new();
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
 
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
         let result = use_case.execute(1, 1, amount("10.0"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_transaction_id() {
+        let account_repo = MockAccountRepository::new();
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(crate::domain::transaction::Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("10.0")),
+            })
+        });
+
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+        let result = use_case.execute(1, 42, amount("10.0"));
 
         assert!(result.is_err());
     }
@@ -180,6 +211,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo
             .expect_save()
             .withf(|tx| {

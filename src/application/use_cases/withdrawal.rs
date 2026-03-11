@@ -9,6 +9,8 @@ pub enum WithdrawalError {
     InsufficientFunds,
     #[error("account is frozen")]
     FrozenAccount,
+    #[error("duplicate transaction id")]
+    DuplicateTransaction,
 }
 
 pub struct WithdrawalUseCase<A: AccountRepository, T: TransactionRepository> {
@@ -30,6 +32,10 @@ impl<A: AccountRepository, T: TransactionRepository> WithdrawalUseCase<A, T> {
         tx: u32,
         amount: Amount,
     ) -> Result<(), WithdrawalError> {
+        if self.tx_repo.find_by_tx_id(tx).is_some() {
+            return Err(WithdrawalError::DuplicateTransaction);
+        }
+
         let mut account = self
             .account_repo
             .find_by_client_id(client_id)
@@ -94,6 +100,7 @@ mod tests {
             .returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
@@ -115,7 +122,8 @@ mod tests {
         });
         account_repo.expect_save().times(0);
 
-        let tx_repo = MockTransactionRepository::new();
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
 
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
         let result = use_case.execute(2, 1, amount("10.0"));
@@ -129,7 +137,8 @@ mod tests {
         account_repo.expect_find_by_client_id().returning(|_| None);
         account_repo.expect_save().times(0);
 
-        let tx_repo = MockTransactionRepository::new();
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
 
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
         let result = use_case.execute(99, 1, amount("1.0"));
@@ -162,6 +171,7 @@ mod tests {
             .returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo.expect_save().returning(|_| ());
 
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
@@ -182,10 +192,31 @@ mod tests {
         });
         account_repo.expect_save().times(0);
 
-        let tx_repo = MockTransactionRepository::new();
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
 
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
         let result = use_case.execute(2, 1, amount("10.0"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_transaction_id() {
+        let account_repo = MockAccountRepository::new();
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(crate::domain::transaction::Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("10.0")),
+            })
+        });
+
+        let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
+        let result = use_case.execute(1, 42, amount("5.0"));
 
         assert!(result.is_err());
     }
@@ -204,6 +235,7 @@ mod tests {
         account_repo.expect_save().returning(|_| ());
 
         let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
         tx_repo
             .expect_save()
             .withf(|tx| {

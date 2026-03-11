@@ -47,3 +47,22 @@ fn frozen_account_rejects_transactions() {
         "expected frozen errors on stderr, got: {stderr}"
     );
 }
+
+#[test]
+fn duplicate_transaction_id_is_rejected() {
+    let output = run("duplicate_tx.csv");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = sorted_body(&stdout);
+
+    assert_eq!(lines.len(), 1);
+    // First deposit of 100 succeeds, duplicate deposit of 50 rejected, withdrawal of 10 succeeds
+    assert_eq!(lines[0], "1,90.00,0.00,90.00,false");
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("duplicate"),
+        "expected duplicate error on stderr, got: {stderr}"
+    );
+}
