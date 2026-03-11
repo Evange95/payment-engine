@@ -46,7 +46,9 @@ where
                 self.withdraw.execute(tx.client, tx.tx, amount).ok();
                 None
             }
-            _ => None,
+            TransactionType::Dispute => self.dispute.execute(tx.client, tx.tx),
+            TransactionType::Resolve => self.resolve.execute(tx.client, tx.tx),
+            TransactionType::Chargeback => self.chargeback.execute(tx.client, tx.tx),
         }
     }
 }
@@ -128,5 +130,111 @@ mod tests {
 
         let result = manager.process(tx);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn routes_dispute_to_dispute_use_case() {
+        let mut mock_dispute = MockDisputeTx::new();
+        mock_dispute
+            .expect_execute()
+            .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
+            .times(1)
+            .returning(|client_id, _| {
+                Some(Account {
+                    client: client_id,
+                    available: Amount::ZERO,
+                    held: Amount::ZERO,
+                    locked: false,
+                })
+            });
+
+        let mut manager = super::TransactionManager::new(
+            MockDeposit::new(),
+            MockWithdraw::new(),
+            mock_dispute,
+            MockResolve::new(),
+            MockChargeback::new(),
+        );
+
+        let tx = Transaction {
+            tx_type: TransactionType::Dispute,
+            client: 1,
+            tx: 42,
+            amount: None,
+        };
+
+        let account = manager.process(tx).unwrap();
+        assert_eq!(account.client, 1);
+    }
+
+    #[test]
+    fn routes_resolve_to_resolve_use_case() {
+        let mut mock_resolve = MockResolve::new();
+        mock_resolve
+            .expect_execute()
+            .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
+            .times(1)
+            .returning(|client_id, _| {
+                Some(Account {
+                    client: client_id,
+                    available: Amount::ZERO,
+                    held: Amount::ZERO,
+                    locked: false,
+                })
+            });
+
+        let mut manager = super::TransactionManager::new(
+            MockDeposit::new(),
+            MockWithdraw::new(),
+            MockDisputeTx::new(),
+            mock_resolve,
+            MockChargeback::new(),
+        );
+
+        let tx = Transaction {
+            tx_type: TransactionType::Resolve,
+            client: 1,
+            tx: 42,
+            amount: None,
+        };
+
+        let account = manager.process(tx).unwrap();
+        assert_eq!(account.client, 1);
+    }
+
+    #[test]
+    fn routes_chargeback_to_chargeback_use_case() {
+        let mut mock_chargeback = MockChargeback::new();
+        mock_chargeback
+            .expect_execute()
+            .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
+            .times(1)
+            .returning(|client_id, _| {
+                Some(Account {
+                    client: client_id,
+                    available: Amount::ZERO,
+                    held: Amount::ZERO,
+                    locked: true,
+                })
+            });
+
+        let mut manager = super::TransactionManager::new(
+            MockDeposit::new(),
+            MockWithdraw::new(),
+            MockDisputeTx::new(),
+            MockResolve::new(),
+            mock_chargeback,
+        );
+
+        let tx = Transaction {
+            tx_type: TransactionType::Chargeback,
+            client: 1,
+            tx: 42,
+            amount: None,
+        };
+
+        let account = manager.process(tx).unwrap();
+        assert_eq!(account.client, 1);
+        assert!(account.locked);
     }
 }
