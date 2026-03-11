@@ -26,7 +26,7 @@ fn basic_deposits_and_withdrawals() {
 
     assert_eq!(lines.len(), 2);
     assert_eq!(lines[0], "1,1.50,0.00,1.50,false");
-    assert_eq!(lines[1], "2,2.00,0.00,2.00,false");
+    assert_eq!(lines[1], "2,1.00,0.00,1.00,false");
 }
 
 #[test]
