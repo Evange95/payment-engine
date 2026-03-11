@@ -76,7 +76,7 @@ mod tests {
         let output = String::from_utf8(buf).unwrap();
         assert_eq!(
             output,
-            "client,available,held,total,locked\n1,1.5000,0.0000,1.5000,false\n"
+            "client,available,held,total,locked\n1,1.50,0.00,1.50,false\n"
         );
     }
 }

@@ -3,8 +3,8 @@ use std::ops::{Add, Sub};
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Fixed-point amount with 4 decimal places.
-/// 15000 represents 1.5000.
+/// Fixed-point amount with 4 decimal places of internal precision.
+/// 15000 represents 1.5000. Displayed with 2 decimal places (rounded).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Amount(i64);
 
@@ -77,11 +77,19 @@ impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let abs = self.0.unsigned_abs();
         let whole = abs / 10_000;
-        let frac = abs % 10_000;
-        if self.0 < 0 {
-            write!(f, "-{whole}.{frac:04}")
+        let frac = (abs % 10_000 + 50) / 100; // round to 2 decimal places
+        if frac >= 100 {
+            // rounding overflowed (e.g. 0.9999 -> 1.00)
+            let whole = whole + 1;
+            if self.0 < 0 {
+                write!(f, "-{whole}.00")
+            } else {
+                write!(f, "{whole}.00")
+            }
+        } else if self.0 < 0 {
+            write!(f, "-{whole}.{frac:02}")
         } else {
-            write!(f, "{whole}.{frac:04}")
+            write!(f, "{whole}.{frac:02}")
         }
     }
 }

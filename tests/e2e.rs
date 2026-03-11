@@ -34,8 +34,8 @@ fn processes_transactions_and_outputs_account_balances() {
     lines.sort();
 
     assert_eq!(lines.len(), 2);
-    assert_eq!(lines[0], "1,1.5000,0.0000,1.5000,false");
-    assert_eq!(lines[1], "2,2.0000,0.0000,2.0000,false");
+    assert_eq!(lines[0], "1,1.50,0.00,1.50,false");
+    assert_eq!(lines[1], "2,2.00,0.00,2.00,false");
 
     let _ = header;
     std::fs::remove_file(&tmp).ok();

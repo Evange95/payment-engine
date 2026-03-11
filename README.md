@@ -24,8 +24,8 @@ Output CSV format:
 
 ```csv
 client,available,held,total,locked
-1,1.5000,0.0000,1.5000,false
-2,0.0000,0.0000,0.0000,true
+1,1.50,0.00,1.50,false
+2,0.00,0.00,0.00,true
 ```
 
 Whitespace in the input CSV is tolerated. Malformed rows are silently skipped.
@@ -44,7 +44,7 @@ stdout   ◄── CsvAccountWriter ◄── AccountRepository.all() ◄──�
 
 Core types with no external dependencies:
 
-- **`Amount`** — fixed-point arithmetic with 4 decimal places, stored as `i64` internally. Parsed from strings via `FromStr`, displayed as `X.XXXX`. Supports `Add`, `Sub`, `is_negative()`.
+- **`Amount`** — fixed-point arithmetic with 4 decimal places, stored as `i64` internally. Parsed from strings via `FromStr`, displayed as `X.XX`. Supports `Add`, `Sub`, `is_negative()`.
 - **`Account`** — client balance with `available`, `held`, `locked` fields. `total() = available + held`.
 - **`Transaction`** — a `TransactionType` enum (Deposit, Withdrawal, Dispute, Resolve, Chargeback) plus `client: u16`, `tx: u32`, `amount: Option<Amount>`.
 
