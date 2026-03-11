@@ -23,6 +23,10 @@ impl<R: AccountRepository> WithdrawalUseCase<R> {
             .find_by_client_id(client_id)
             .unwrap_or_else(|| crate::domain::account::Account::new(client_id));
 
+        if (account.available - amount).is_negative() {
+            return Err(WithdrawalError::InsufficientFunds);
+        }
+
         account.available = account.available - amount;
         self.account_repo.save(account);
         Ok(())
@@ -87,5 +91,24 @@ mod tests {
         let account = use_case.repo().get(2).unwrap();
         assert_eq!(account.available, amount("99.0"));
         assert_eq!(account.total(), amount("109.0"));
+    }
+
+    #[test]
+    fn fails_with_insufficient_available_funds() {
+        let mut repo = InMemoryAccountRepo::new();
+        repo.save(Account {
+            client: 2,
+            available: amount("5.0"),
+            held: amount("10.0"),
+            locked: false,
+        });
+        let mut use_case = super::WithdrawalUseCase::new(repo);
+
+        let result = use_case.execute(2, amount("10.0"));
+
+        assert!(result.is_err());
+        let account = use_case.repo().get(2).unwrap();
+        assert_eq!(account.available, amount("5.0"));
+        assert_eq!(account.total(), amount("15.0"));
     }
 }
