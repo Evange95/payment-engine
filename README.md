@@ -7,8 +7,8 @@ A simple payment engine that processes transactions (deposits, withdrawals, disp
 The project follows a hexagonal (ports & adapters) architecture:
 
 - **Domain** — core types: `Account`, `Amount` (fixed-point 4 decimals), `Transaction`
-- **Ports** — repository traits: `AccountRepository`, `TransactionRepository`
-- **Application** — use cases: `DepositUseCase`, `WithdrawalUseCase`, `DisputeUseCase`
+- **Ports** — repository traits: `AccountRepository`, `TransactionRepository`, `DisputeRepository`
+- **Application** — use cases: `DepositUseCase`, `WithdrawalUseCase`, `DisputeUseCase`, `ResolveUseCase`
 
 Each use case is generic over its repository traits, making it testable with in-memory implementations and adaptable to any storage backend.
 
