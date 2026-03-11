@@ -103,3 +103,107 @@ pub enum ParseAmountError {
     #[error("more than 4 decimal places")]
     TooManyDecimals,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- Parsing tests ---
+
+    #[test]
+    fn parses_whole_number() {
+        let amount: Amount = "42".parse().unwrap();
+        assert_eq!(amount, Amount(420_000));
+    }
+
+    #[test]
+    fn parses_with_decimal() {
+        let amount: Amount = "1.5".parse().unwrap();
+        assert_eq!(amount, Amount(15_000));
+    }
+
+    #[test]
+    fn parses_four_decimal_places() {
+        let amount: Amount = "1.2345".parse().unwrap();
+        assert_eq!(amount, Amount(12_345));
+    }
+
+    #[test]
+    fn parses_negative() {
+        let amount: Amount = "-3.50".parse().unwrap();
+        assert_eq!(amount, Amount(-35_000));
+    }
+
+    #[test]
+    fn parses_with_leading_whitespace() {
+        let amount: Amount = "  7.25  ".parse().unwrap();
+        assert_eq!(amount, Amount(72_500));
+    }
+
+    #[test]
+    fn rejects_empty_string() {
+        assert_eq!("".parse::<Amount>(), Err(ParseAmountError::Empty));
+    }
+
+    #[test]
+    fn rejects_too_many_decimals() {
+        assert_eq!(
+            "1.23456".parse::<Amount>(),
+            Err(ParseAmountError::TooManyDecimals)
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_input() {
+        assert!("abc".parse::<Amount>().is_err());
+    }
+
+    // --- Display tests ---
+
+    #[test]
+    fn displays_zero() {
+        assert_eq!(Amount::ZERO.to_string(), "0.00");
+    }
+
+    #[test]
+    fn displays_whole_number_with_two_decimals() {
+        let amount: Amount = "2".parse().unwrap();
+        assert_eq!(amount.to_string(), "2.00");
+    }
+
+    #[test]
+    fn displays_fractional_rounded_to_two_decimals() {
+        let amount: Amount = "1.5".parse().unwrap();
+        assert_eq!(amount.to_string(), "1.50");
+    }
+
+    #[test]
+    fn displays_rounding_up() {
+        let amount: Amount = "1.005".parse().unwrap();
+        assert_eq!(amount.to_string(), "1.01");
+    }
+
+    #[test]
+    fn displays_rounding_down() {
+        let amount: Amount = "1.004".parse().unwrap();
+        assert_eq!(amount.to_string(), "1.00");
+    }
+
+    #[test]
+    fn displays_rounding_overflow() {
+        let amount: Amount = "0.9999".parse().unwrap();
+        assert_eq!(amount.to_string(), "1.00");
+    }
+
+    #[test]
+    fn displays_negative() {
+        let amount: Amount = "-3.50".parse().unwrap();
+        assert_eq!(amount.to_string(), "-3.50");
+    }
+
+    #[test]
+    fn displays_negative_rounding_overflow() {
+        let amount: Amount = "-0.9999".parse().unwrap();
+        assert_eq!(amount.to_string(), "-1.00");
+    }
+}
