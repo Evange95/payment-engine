@@ -1,6 +1,21 @@
 use crate::domain::account::Account;
 use crate::domain::transaction::{Transaction, TransactionType};
 use crate::ports;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ProcessError {
+    #[error("deposit failed: {0}")]
+    Deposit(#[from] crate::application::use_cases::deposit::DepositError),
+    #[error("withdrawal failed: {0}")]
+    Withdrawal(#[from] crate::application::use_cases::withdrawal::WithdrawalError),
+    #[error("dispute failed: {0}")]
+    Dispute(#[from] crate::application::use_cases::dispute::DisputeError),
+    #[error("resolve failed: {0}")]
+    Resolve(#[from] crate::application::use_cases::resolve::ResolveError),
+    #[error("chargeback failed: {0}")]
+    Chargeback(#[from] crate::application::use_cases::chargeback::ChargebackError),
+}
 
 pub struct TransactionManager<D, W, Di, R, C>
 where
@@ -35,20 +50,33 @@ where
         }
     }
 
-    pub fn process(&mut self, tx: Transaction) -> Option<Account> {
+    pub fn process(&mut self, tx: Transaction) -> Result<Option<Account>, ProcessError> {
         match tx.tx_type {
             TransactionType::Deposit => {
-                let amount = tx.amount?;
-                Some(self.deposit.execute(tx.client, tx.tx, amount))
+                let amount = match tx.amount {
+                    Some(a) => a,
+                    None => return Ok(None),
+                };
+                let account = self.deposit.execute(tx.client, tx.tx, amount)?;
+                Ok(Some(account))
             }
             TransactionType::Withdrawal => {
-                let amount = tx.amount?;
-                self.withdraw.execute(tx.client, tx.tx, amount).ok();
-                None
+                let amount = match tx.amount {
+                    Some(a) => a,
+                    None => return Ok(None),
+                };
+                self.withdraw.execute(tx.client, tx.tx, amount)?;
+                Ok(None)
             }
-            TransactionType::Dispute => self.dispute.execute(tx.client, tx.tx),
-            TransactionType::Resolve => self.resolve.execute(tx.client, tx.tx),
-            TransactionType::Chargeback => self.chargeback.execute(tx.client, tx.tx),
+            TransactionType::Dispute => {
+                Ok(self.dispute.execute(tx.client, tx.tx)?)
+            }
+            TransactionType::Resolve => {
+                Ok(self.resolve.execute(tx.client, tx.tx)?)
+            }
+            TransactionType::Chargeback => {
+                Ok(self.chargeback.execute(tx.client, tx.tx)?)
+            }
         }
     }
 }
@@ -73,11 +101,13 @@ mod tests {
                 *client_id == 1 && *tx == 42 && *amount == "100.0".parse::<Amount>().unwrap()
             })
             .times(1)
-            .returning(|client_id, _, amount| Account {
-                client: client_id,
-                available: amount,
-                held: Amount::ZERO,
-                locked: false,
+            .returning(|client_id, _, amount| {
+                Ok(Account {
+                    client: client_id,
+                    available: amount,
+                    held: Amount::ZERO,
+                    locked: false,
+                })
             });
 
         let mut manager = super::TransactionManager::new(
@@ -95,7 +125,7 @@ mod tests {
             amount: Some(amount("100.0")),
         };
 
-        let account = manager.process(tx).unwrap();
+        let account = manager.process(tx).unwrap().unwrap();
         assert_eq!(account.client, 1);
         assert_eq!(account.available, amount("100.0"));
     }
@@ -126,7 +156,7 @@ mod tests {
             amount: Some(amount("10.0")),
         };
 
-        let result = manager.process(tx);
+        let result = manager.process(tx).unwrap();
         assert!(result.is_none());
     }
 
@@ -138,12 +168,12 @@ mod tests {
             .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
             .times(1)
             .returning(|client_id, _| {
-                Some(Account {
+                Ok(Some(Account {
                     client: client_id,
                     available: Amount::ZERO,
                     held: Amount::ZERO,
                     locked: false,
-                })
+                }))
             });
 
         let mut manager = super::TransactionManager::new(
@@ -161,7 +191,7 @@ mod tests {
             amount: None,
         };
 
-        let account = manager.process(tx).unwrap();
+        let account = manager.process(tx).unwrap().unwrap();
         assert_eq!(account.client, 1);
     }
 
@@ -173,12 +203,12 @@ mod tests {
             .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
             .times(1)
             .returning(|client_id, _| {
-                Some(Account {
+                Ok(Some(Account {
                     client: client_id,
                     available: Amount::ZERO,
                     held: Amount::ZERO,
                     locked: false,
-                })
+                }))
             });
 
         let mut manager = super::TransactionManager::new(
@@ -196,7 +226,7 @@ mod tests {
             amount: None,
         };
 
-        let account = manager.process(tx).unwrap();
+        let account = manager.process(tx).unwrap().unwrap();
         assert_eq!(account.client, 1);
     }
 
@@ -208,12 +238,12 @@ mod tests {
             .withf(|client_id, tx_id| *client_id == 1 && *tx_id == 42)
             .times(1)
             .returning(|client_id, _| {
-                Some(Account {
+                Ok(Some(Account {
                     client: client_id,
                     available: Amount::ZERO,
                     held: Amount::ZERO,
                     locked: true,
-                })
+                }))
             });
 
         let mut manager = super::TransactionManager::new(
@@ -231,7 +261,7 @@ mod tests {
             amount: None,
         };
 
-        let account = manager.process(tx).unwrap();
+        let account = manager.process(tx).unwrap().unwrap();
         assert_eq!(account.client, 1);
         assert!(account.locked);
     }

@@ -30,6 +30,8 @@ client,available,held,total,locked
 
 Whitespace in the input CSV is tolerated. Malformed rows are silently skipped.
 
+A chargeback freezes the client's account. Once frozen, the account rejects all subsequent transactions (deposits, withdrawals, disputes, resolves, and chargebacks). Rejected transactions are reported to stderr.
+
 ## Architecture
 
 Hexagonal (ports & adapters) architecture with three layers:
@@ -99,7 +101,7 @@ Both repository traits and use case traits use `#[cfg_attr(test, mockall::automo
 cargo test
 ```
 
-42 tests total:
+63 tests total:
 - Unit tests for each use case (deposit, withdrawal, dispute, resolve, chargeback)
 - Unit tests for `TransactionManager` routing
 - Unit tests for CSV reader (parsing, whitespace, malformed rows, streaming)

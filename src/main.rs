@@ -40,7 +40,9 @@ fn main() {
 
     let reader = CsvTransactionReader::new(file);
     for tx in reader {
-        manager.process(tx);
+        if let Err(e) = manager.process(tx) {
+            eprintln!("error: {e}");
+        }
     }
 
     let accounts = account_repo.borrow().all();

@@ -1,5 +1,12 @@
 use crate::domain::account::Account;
 use crate::ports::{AccountRepository, Chargeback, DisputeRepository, TransactionRepository};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ChargebackError {
+    #[error("account is frozen")]
+    FrozenAccount,
+}
 
 pub struct ChargebackUseCase<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> {
     account_repo: A,
@@ -18,27 +25,40 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
         }
     }
 
-    pub fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account> {
+    pub fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, ChargebackError> {
         if !self.dispute_repo.is_disputed(tx_id) {
-            return None;
+            return Ok(None);
         }
 
-        let tx = self.tx_repo.find_by_tx_id(tx_id)?;
-        let mut account = self.account_repo.find_by_client_id(client_id)?;
-        let amount = tx.amount?;
+        let tx = match self.tx_repo.find_by_tx_id(tx_id) {
+            Some(tx) => tx,
+            None => return Ok(None),
+        };
+        let mut account = match self.account_repo.find_by_client_id(client_id) {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+        if account.locked {
+            return Err(ChargebackError::FrozenAccount);
+        }
+
+        let amount = match tx.amount {
+            Some(a) => a,
+            None => return Ok(None),
+        };
 
         account.held = account.held - amount;
         account.locked = true;
         self.account_repo.save(account.clone());
         self.dispute_repo.remove_dispute(tx_id);
-        Some(account)
+        Ok(Some(account))
     }
 }
 
 impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> Chargeback
     for ChargebackUseCase<A, T, D>
 {
-    fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account> {
+    fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, ChargebackError> {
         self.execute(client_id, tx_id)
     }
 }
@@ -82,7 +102,7 @@ mod tests {
         dispute_repo.expect_remove_dispute().returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        let account = use_case.execute(1, 42).unwrap();
+        let account = use_case.execute(1, 42).unwrap().unwrap();
 
         assert_eq!(account.available, amount("70.0"));
         assert_eq!(account.held, Amount::ZERO);
@@ -101,7 +121,7 @@ mod tests {
         dispute_repo.expect_is_disputed().returning(|_| false);
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        let result = use_case.execute(1, 42);
+        let result = use_case.execute(1, 42).unwrap();
 
         assert!(result.is_none());
     }
@@ -118,7 +138,7 @@ mod tests {
         dispute_repo.expect_is_disputed().returning(|_| true);
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        let result = use_case.execute(1, 999);
+        let result = use_case.execute(1, 999).unwrap();
 
         assert!(result.is_none());
     }
@@ -151,12 +171,44 @@ mod tests {
         dispute_repo.expect_remove_dispute().returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        let account = use_case.execute(1, 10).unwrap();
+        let account = use_case.execute(1, 10).unwrap().unwrap();
 
         assert_eq!(account.available, amount("50.0"));
         assert_eq!(account.held, amount("55.0"));
         assert_eq!(account.total(), amount("105.0"));
         assert!(account.locked);
+    }
+
+    #[test]
+    fn rejects_frozen_account() {
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("70.0"),
+                held: amount("30.0"),
+                locked: true,
+            })
+        });
+        account_repo.expect_save().times(0);
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
+        });
+
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| true);
+
+        let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
+        let result = use_case.execute(1, 42);
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -191,6 +243,6 @@ mod tests {
             .returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 42);
+        use_case.execute(1, 42).unwrap();
     }
 }

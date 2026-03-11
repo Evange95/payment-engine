@@ -1,3 +1,8 @@
+use crate::application::use_cases::chargeback::ChargebackError;
+use crate::application::use_cases::deposit::DepositError;
+use crate::application::use_cases::dispute::DisputeError;
+use crate::application::use_cases::resolve::ResolveError;
+use crate::application::use_cases::withdrawal::WithdrawalError;
 use crate::domain::account::Account;
 use crate::domain::amount::Amount;
 use crate::domain::transaction::Transaction;
@@ -25,7 +30,7 @@ pub trait DisputeRepository {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Deposit {
-    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Account;
+    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Result<Account, DepositError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -35,22 +40,22 @@ pub trait Withdraw {
         client_id: u16,
         tx: u32,
         amount: Amount,
-    ) -> Result<(), crate::application::use_cases::withdrawal::WithdrawalError>;
+    ) -> Result<(), WithdrawalError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
 pub trait DisputeTx {
-    fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
+    fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, DisputeError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Resolve {
-    fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
+    fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, ResolveError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Chargeback {
-    fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
+    fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, ChargebackError>;
 }
 
 pub trait AccountWriter {

@@ -7,6 +7,8 @@ use thiserror::Error;
 pub enum WithdrawalError {
     #[error("insufficient available funds")]
     InsufficientFunds,
+    #[error("account is frozen")]
+    FrozenAccount,
 }
 
 pub struct WithdrawalUseCase<A: AccountRepository, T: TransactionRepository> {
@@ -32,6 +34,10 @@ impl<A: AccountRepository, T: TransactionRepository> WithdrawalUseCase<A, T> {
             .account_repo
             .find_by_client_id(client_id)
             .unwrap_or_else(|| crate::domain::account::Account::new(client_id));
+
+        if account.locked {
+            return Err(WithdrawalError::FrozenAccount);
+        }
 
         if (account.available - amount).is_negative() {
             return Err(WithdrawalError::InsufficientFunds);
@@ -161,6 +167,27 @@ mod tests {
         let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
         use_case.execute(1, 1, amount("10.0")).unwrap();
         use_case.execute(2, 2, amount("50.0")).unwrap();
+    }
+
+    #[test]
+    fn rejects_frozen_account() {
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 2,
+                available: amount("100.0"),
+                held: Amount::ZERO,
+                locked: true,
+            })
+        });
+        account_repo.expect_save().times(0);
+
+        let tx_repo = MockTransactionRepository::new();
+
+        let mut use_case = super::WithdrawalUseCase::new(account_repo, tx_repo);
+        let result = use_case.execute(2, 1, amount("10.0"));
+
+        assert!(result.is_err());
     }
 
     #[test]
