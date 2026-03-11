@@ -53,9 +53,7 @@ pub trait Chargeback {
     fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
 }
 
-pub trait TransactionReader {
-    fn read_all(self) -> Vec<Transaction>;
-}
+pub trait TransactionReader: Iterator<Item = Transaction> {}
 
 pub trait AccountWriter {
     fn write_all(&mut self, accounts: &[Account]) -> Result<(), io::Error>;
