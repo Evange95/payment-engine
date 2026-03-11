@@ -6,6 +6,7 @@ use std::io;
 pub trait AccountRepository {
     fn find_by_client_id(&self, client_id: u16) -> Option<Account>;
     fn save(&mut self, account: Account);
+    fn all(&self) -> Vec<Account>;
 }
 
 pub trait TransactionRepository {
