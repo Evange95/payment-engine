@@ -126,3 +126,15 @@ The CSV reader and writer can be replaced with other adapters (e.g., HTTP, datab
 ### Why Not Async (Tokio)
 
 The engine is intentionally synchronous. The only I/O is reading a local CSV file and writing to stdout — there are no network calls, database connections, or concurrent I/O sources where `async` would help. All data lives in `HashMap`/`HashSet` behind `Rc<RefCell<T>>`, which isn't `Send`/`Sync` — adopting Tokio would require migrating to `Arc<Mutex<T>>` and making all traits async for no throughput benefit. Transaction ordering also matters (disputes reference earlier deposits), so parallelism would add complexity without correctness guarantees. If the engine later grew an HTTP API or a real database backend, async would become justified.
+
+## AI Disclosure
+
+This project was developed with the assistance of **Claude Code** (Anthropic's CLI tool). AI was used as a pair-programming partner throughout development for:
+
+- **Architecture discussions** — evaluating hexagonal architecture trade-offs, `Rc<RefCell<T>>` vs `Arc<Mutex<T>>`, static vs dynamic dispatch
+- **TDD workflow** — writing failing tests first, then implementing code to make them pass
+- **Code generation** — scaffolding use cases, error types, trait implementations, and test fixtures
+- **Design decisions** — fixed-point arithmetic approach, streaming vs buffering, async vs sync trade-offs
+- **README authoring** — structuring documentation and articulating design rationale
+
+All architectural decisions, domain modeling choices, and error handling strategies were directed and validated by the author. The AI acted as an accelerator — not a decision-maker.
