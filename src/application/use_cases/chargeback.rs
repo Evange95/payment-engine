@@ -54,86 +54,13 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
 
 #[cfg(test)]
 mod tests {
+    use crate::adapters::in_memory_account_repo::InMemoryAccountRepo;
+    use crate::adapters::in_memory_dispute_repo::InMemoryDisputeRepo;
+    use crate::adapters::in_memory_transaction_repo::InMemoryTransactionRepo;
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::{Transaction, TransactionType};
     use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
-    use std::collections::HashMap;
-    use std::collections::HashSet;
-
-    struct InMemoryAccountRepo {
-        accounts: HashMap<u16, Account>,
-    }
-
-    impl InMemoryAccountRepo {
-        fn new() -> Self {
-            Self {
-                accounts: HashMap::new(),
-            }
-        }
-
-        fn get(&self, client_id: u16) -> Option<&Account> {
-            self.accounts.get(&client_id)
-        }
-    }
-
-    impl AccountRepository for InMemoryAccountRepo {
-        fn find_by_client_id(&self, client_id: u16) -> Option<Account> {
-            self.accounts.get(&client_id).cloned()
-        }
-
-        fn save(&mut self, account: Account) {
-            self.accounts.insert(account.client, account);
-        }
-    }
-
-    struct InMemoryTransactionRepo {
-        transactions: HashMap<u32, Transaction>,
-    }
-
-    impl InMemoryTransactionRepo {
-        fn new() -> Self {
-            Self {
-                transactions: HashMap::new(),
-            }
-        }
-    }
-
-    impl TransactionRepository for InMemoryTransactionRepo {
-        fn find_by_tx_id(&self, tx_id: u32) -> Option<Transaction> {
-            self.transactions.get(&tx_id).cloned()
-        }
-
-        fn save(&mut self, transaction: Transaction) {
-            self.transactions.insert(transaction.tx, transaction);
-        }
-    }
-
-    struct InMemoryDisputeRepo {
-        disputed: HashSet<u32>,
-    }
-
-    impl InMemoryDisputeRepo {
-        fn new() -> Self {
-            Self {
-                disputed: HashSet::new(),
-            }
-        }
-    }
-
-    impl DisputeRepository for InMemoryDisputeRepo {
-        fn is_disputed(&self, tx_id: u32) -> bool {
-            self.disputed.contains(&tx_id)
-        }
-
-        fn mark_disputed(&mut self, tx_id: u32) {
-            self.disputed.insert(tx_id);
-        }
-
-        fn remove_dispute(&mut self, tx_id: u32) {
-            self.disputed.remove(&tx_id);
-        }
-    }
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
