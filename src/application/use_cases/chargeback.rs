@@ -169,4 +169,33 @@ mod tests {
         assert_eq!(account.total(), amount("70.0"));
         assert!(account.locked);
     }
+
+    #[test]
+    fn ignores_non_disputed_transaction() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("70.0"),
+            held: amount("30.0"),
+            locked: false,
+        });
+
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("30.0")),
+        });
+
+        let dispute_repo = InMemoryDisputeRepo::new(); // not disputed
+
+        let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 42);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("70.0"));
+        assert_eq!(account.held, amount("30.0"));
+        assert!(!account.locked);
+    }
 }
