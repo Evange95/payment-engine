@@ -101,13 +101,13 @@ Both repository traits and use case traits use `#[cfg_attr(test, mockall::automo
 cargo test
 ```
 
-67 tests total:
+69 tests total:
 - Unit tests for each use case (deposit, withdrawal, dispute, resolve, chargeback)
 - Unit tests for `TransactionManager` routing
 - Unit tests for CSV reader (parsing, whitespace, malformed rows, streaming)
 - Unit tests for CSV writer
 - Unit tests for in-memory repos (including `Rc<RefCell<>>` impls)
-- E2E tests running the binary with fixture CSVs (basic, frozen account, duplicate tx)
+- E2E tests running the binary with fixture CSVs (basic, dispute, dispute+resolve, frozen account, duplicate tx)
 
 ## Future Considerations
 

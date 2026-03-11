@@ -66,3 +66,29 @@ fn duplicate_transaction_id_is_rejected() {
         "expected duplicate error on stderr, got: {stderr}"
     );
 }
+
+#[test]
+fn dispute_holds_funds() {
+    let output = run("dispute.csv");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = sorted_body(&stdout);
+
+    assert_eq!(lines.len(), 1);
+    // Deposited 100 + 50, disputed tx1 (100): available=50, held=100, total=150
+    assert_eq!(lines[0], "1,50.00,100.00,150.00,false");
+}
+
+#[test]
+fn dispute_then_resolve_releases_funds() {
+    let output = run("dispute_resolve.csv");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = sorted_body(&stdout);
+
+    assert_eq!(lines.len(), 1);
+    // Deposited 100 + 50, disputed tx1, resolved tx1, withdrew 30: available=120, held=0
+    assert_eq!(lines[0], "1,120.00,0.00,120.00,false");
+}
