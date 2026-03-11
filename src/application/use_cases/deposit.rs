@@ -64,6 +64,24 @@ mod tests {
     }
 
     #[test]
+    fn increases_available_and_total() {
+        let mut repo = InMemoryAccountRepo::new();
+        repo.save(Account {
+            client: 1,
+            available: amount("30.0"),
+            held: amount("10.0"),
+            locked: false,
+        });
+        let mut use_case = super::DepositUseCase::new(repo);
+
+        use_case.execute(1, amount("20.0"));
+
+        let account = use_case.repo().get(1).unwrap();
+        assert_eq!(account.available, amount("50.0"));
+        assert_eq!(account.total(), amount("60.0"));
+    }
+
+    #[test]
     fn creates_account_on_first_deposit() {
         let repo = InMemoryAccountRepo::new();
         let mut use_case = super::DepositUseCase::new(repo);
