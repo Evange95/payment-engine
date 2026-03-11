@@ -74,6 +74,45 @@ mod tests {
     }
 
     #[test]
+    fn reads_dispute_without_amount() {
+        let csv = "type,client,tx,amount\ndispute,1,42,\n";
+        let reader = super::CsvTransactionReader::new(csv.as_bytes());
+
+        let txs = reader.read_all();
+
+        assert_eq!(txs.len(), 1);
+        assert_eq!(txs[0].tx_type, TransactionType::Dispute);
+        assert_eq!(txs[0].client, 1);
+        assert_eq!(txs[0].tx, 42);
+        assert_eq!(txs[0].amount, None);
+    }
+
+    #[test]
+    fn reads_multiple_transaction_types() {
+        let csv = "type,client,tx,amount\ndeposit,1,1,1.0\ndeposit,2,2,2.0\ndispute,1,1,\n";
+        let reader = super::CsvTransactionReader::new(csv.as_bytes());
+
+        let txs = reader.read_all();
+
+        assert_eq!(txs.len(), 3);
+        assert_eq!(txs[0].tx_type, TransactionType::Deposit);
+        assert_eq!(txs[1].tx_type, TransactionType::Deposit);
+        assert_eq!(txs[2].tx_type, TransactionType::Dispute);
+    }
+
+    #[test]
+    fn handles_whitespace_in_csv() {
+        let csv = "type, client, tx, amount\ndeposit, 1, 1, 1.0\n";
+        let reader = super::CsvTransactionReader::new(csv.as_bytes());
+
+        let txs = reader.read_all();
+
+        assert_eq!(txs.len(), 1);
+        assert_eq!(txs[0].tx_type, TransactionType::Deposit);
+        assert_eq!(txs[0].amount, Some(amount("1.0")));
+    }
+
+    #[test]
     fn reads_deposit_from_csv() {
         let csv = "type,client,tx,amount\ndeposit,1,1,1.0\n";
         let reader = super::CsvTransactionReader::new(csv.as_bytes());
