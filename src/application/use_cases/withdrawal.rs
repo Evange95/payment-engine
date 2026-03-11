@@ -111,4 +111,38 @@ mod tests {
         assert_eq!(account.available, amount("5.0"));
         assert_eq!(account.total(), amount("15.0"));
     }
+
+    #[test]
+    fn fails_on_non_existent_account() {
+        let repo = InMemoryAccountRepo::new();
+        let mut use_case = super::WithdrawalUseCase::new(repo);
+
+        let result = use_case.execute(99, amount("1.0"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn withdrawals_to_separate_clients_independently() {
+        let mut repo = InMemoryAccountRepo::new();
+        repo.save(Account {
+            client: 1,
+            available: amount("100.0"),
+            held: Amount::ZERO,
+            locked: false,
+        });
+        repo.save(Account {
+            client: 2,
+            available: amount("200.0"),
+            held: Amount::ZERO,
+            locked: false,
+        });
+        let mut use_case = super::WithdrawalUseCase::new(repo);
+
+        use_case.execute(1, amount("10.0")).unwrap();
+        use_case.execute(2, amount("50.0")).unwrap();
+
+        assert_eq!(use_case.repo().get(1).unwrap().available, amount("90.0"));
+        assert_eq!(use_case.repo().get(2).unwrap().available, amount("150.0"));
+    }
 }
