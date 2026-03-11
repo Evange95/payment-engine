@@ -49,25 +49,25 @@ fn parse_row(row: CsvRow) -> Option<Transaction> {
     })
 }
 
-impl<R: std::io::Read> TransactionReader for CsvTransactionReader<R> {
-    fn read_all(mut self) -> Vec<Transaction> {
-        let mut transactions = Vec::new();
-        for result in self.reader.deserialize::<CsvRow>() {
-            if let Ok(row) = result {
-                if let Some(tx) = parse_row(row) {
-                    transactions.push(tx);
-                }
+impl<R: std::io::Read> Iterator for CsvTransactionReader<R> {
+    type Item = Transaction;
+
+    fn next(&mut self) -> Option<Transaction> {
+        loop {
+            let row: CsvRow = self.reader.deserialize().next()?.ok()?;
+            if let Some(tx) = parse_row(row) {
+                return Some(tx);
             }
         }
-        transactions
     }
 }
+
+impl<R: std::io::Read> TransactionReader for CsvTransactionReader<R> {}
 
 #[cfg(test)]
 mod tests {
     use crate::domain::amount::Amount;
     use crate::domain::transaction::TransactionType;
-    use crate::ports::TransactionReader;
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
@@ -78,7 +78,7 @@ mod tests {
         let csv = "type,client,tx,amount\ndispute,1,42,\n";
         let reader = super::CsvTransactionReader::new(csv.as_bytes());
 
-        let txs = reader.read_all();
+        let txs = reader.collect::<Vec<_>>();
 
         assert_eq!(txs.len(), 1);
         assert_eq!(txs[0].tx_type, TransactionType::Dispute);
@@ -92,7 +92,7 @@ mod tests {
         let csv = "type,client,tx,amount\ndeposit,1,1,1.0\ndeposit,2,2,2.0\ndispute,1,1,\n";
         let reader = super::CsvTransactionReader::new(csv.as_bytes());
 
-        let txs = reader.read_all();
+        let txs = reader.collect::<Vec<_>>();
 
         assert_eq!(txs.len(), 3);
         assert_eq!(txs[0].tx_type, TransactionType::Deposit);
@@ -105,7 +105,7 @@ mod tests {
         let csv = "type, client, tx, amount\ndeposit, 1, 1, 1.0\n";
         let reader = super::CsvTransactionReader::new(csv.as_bytes());
 
-        let txs = reader.read_all();
+        let txs = reader.collect::<Vec<_>>();
 
         assert_eq!(txs.len(), 1);
         assert_eq!(txs[0].tx_type, TransactionType::Deposit);
@@ -117,12 +117,28 @@ mod tests {
         let csv = "type,client,tx,amount\ndeposit,1,1,1.0\n";
         let reader = super::CsvTransactionReader::new(csv.as_bytes());
 
-        let txs = reader.read_all();
+        let txs = reader.collect::<Vec<_>>();
 
         assert_eq!(txs.len(), 1);
         assert_eq!(txs[0].tx_type, TransactionType::Deposit);
         assert_eq!(txs[0].client, 1);
         assert_eq!(txs[0].tx, 1);
         assert_eq!(txs[0].amount, Some(amount("1.0")));
+    }
+
+    #[test]
+    fn iterates_transactions_one_at_a_time() {
+        let csv = "type,client,tx,amount\ndeposit,1,1,1.0\ndeposit,2,2,2.0\n";
+        let mut reader = super::CsvTransactionReader::new(csv.as_bytes());
+
+        let first = reader.next().unwrap();
+        assert_eq!(first.client, 1);
+        assert_eq!(first.tx, 1);
+
+        let second = reader.next().unwrap();
+        assert_eq!(second.client, 2);
+        assert_eq!(second.tx, 2);
+
+        assert!(reader.next().is_none());
     }
 }

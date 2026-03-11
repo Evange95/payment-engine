@@ -14,7 +14,7 @@ use application::use_cases::deposit::DepositUseCase;
 use application::use_cases::dispute::DisputeUseCase;
 use application::use_cases::resolve::ResolveUseCase;
 use application::use_cases::withdrawal::WithdrawalUseCase;
-use ports::{AccountRepository, AccountWriter, TransactionReader};
+use ports::{AccountRepository, AccountWriter};
 use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
@@ -39,7 +39,7 @@ fn main() {
     let mut manager = TransactionManager::new(deposit, withdraw, dispute, resolve, chargeback);
 
     let reader = CsvTransactionReader::new(file);
-    for tx in reader.read_all() {
+    for tx in reader {
         manager.process(tx);
     }
 
