@@ -168,4 +168,109 @@ mod tests {
         assert_eq!(account.held, Amount::ZERO);
         assert_eq!(account.total(), amount("100.0"));
     }
+
+    #[test]
+    fn removes_dispute_after_resolve() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("70.0"),
+            held: amount("30.0"),
+            locked: false,
+        });
+
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("30.0")),
+        });
+
+        let mut dispute_repo = InMemoryDisputeRepo::new();
+        dispute_repo.mark_disputed(42);
+
+        let mut use_case = super::ResolveUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 42);
+
+        assert!(!use_case.dispute_repo().is_disputed(42));
+    }
+
+    #[test]
+    fn ignores_non_disputed_transaction() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("70.0"),
+            held: amount("30.0"),
+            locked: false,
+        });
+
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("30.0")),
+        });
+
+        let dispute_repo = InMemoryDisputeRepo::new(); // not disputed
+
+        let mut use_case = super::ResolveUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 42);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("70.0"));
+        assert_eq!(account.held, amount("30.0"));
+    }
+
+    #[test]
+    fn ignores_non_existent_transaction() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("70.0"),
+            held: amount("30.0"),
+            locked: false,
+        });
+        let tx_repo = InMemoryTransactionRepo::new();
+        let dispute_repo = InMemoryDisputeRepo::new();
+
+        let mut use_case = super::ResolveUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 999);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("70.0"));
+        assert_eq!(account.held, amount("30.0"));
+    }
+
+    #[test]
+    fn total_funds_unchanged_after_resolve() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("50.0"),
+            held: amount("80.0"),
+            locked: false,
+        });
+
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 10,
+            amount: Some(amount("25.0")),
+        });
+
+        let mut dispute_repo = InMemoryDisputeRepo::new();
+        dispute_repo.mark_disputed(10);
+
+        let mut use_case = super::ResolveUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 10);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("75.0"));
+        assert_eq!(account.held, amount("55.0"));
+        assert_eq!(account.total(), amount("130.0"));
+    }
 }
