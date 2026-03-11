@@ -42,5 +42,8 @@ fn frozen_account_rejects_transactions() {
     assert_eq!(lines[0], "1,0.00,0.00,0.00,true");
 
     let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("frozen"), "expected frozen errors on stderr, got: {stderr}");
+    assert!(
+        stderr.contains("frozen"),
+        "expected frozen errors on stderr, got: {stderr}"
+    );
 }

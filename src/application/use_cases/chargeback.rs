@@ -25,7 +25,11 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
         }
     }
 
-    pub fn execute(&mut self, client_id: u16, tx_id: u32) -> Result<Option<Account>, ChargebackError> {
+    pub fn execute(
+        &mut self,
+        client_id: u16,
+        tx_id: u32,
+    ) -> Result<Option<Account>, ChargebackError> {
         if !self.dispute_repo.is_disputed(tx_id) {
             return Ok(None);
         }

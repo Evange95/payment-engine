@@ -30,17 +30,13 @@ pub trait DisputeRepository {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Deposit {
-    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Result<Account, DepositError>;
+    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount)
+    -> Result<Account, DepositError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Withdraw {
-    fn execute(
-        &mut self,
-        client_id: u16,
-        tx: u32,
-        amount: Amount,
-    ) -> Result<(), WithdrawalError>;
+    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Result<(), WithdrawalError>;
 }
 
 #[cfg_attr(test, mockall::automock)]

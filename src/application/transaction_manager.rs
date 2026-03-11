@@ -68,15 +68,9 @@ where
                 self.withdraw.execute(tx.client, tx.tx, amount)?;
                 Ok(None)
             }
-            TransactionType::Dispute => {
-                Ok(self.dispute.execute(tx.client, tx.tx)?)
-            }
-            TransactionType::Resolve => {
-                Ok(self.resolve.execute(tx.client, tx.tx)?)
-            }
-            TransactionType::Chargeback => {
-                Ok(self.chargeback.execute(tx.client, tx.tx)?)
-            }
+            TransactionType::Dispute => Ok(self.dispute.execute(tx.client, tx.tx)?),
+            TransactionType::Resolve => Ok(self.resolve.execute(tx.client, tx.tx)?),
+            TransactionType::Chargeback => Ok(self.chargeback.execute(tx.client, tx.tx)?),
         }
     }
 }
