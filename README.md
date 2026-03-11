@@ -122,3 +122,7 @@ The domain naturally maps to an event-sourced architecture — deposits, withdra
 ### Swappable I/O Adapters
 
 The CSV reader and writer can be replaced with other adapters (e.g., HTTP, database) since use cases depend on traits, not concrete implementations.
+
+### Why Not Async (Tokio)
+
+The engine is intentionally synchronous. The only I/O is reading a local CSV file and writing to stdout — there are no network calls, database connections, or concurrent I/O sources where `async` would help. All data lives in `HashMap`/`HashSet` behind `Rc<RefCell<T>>`, which isn't `Send`/`Sync` — adopting Tokio would require migrating to `Arc<Mutex<T>>` and making all traits async for no throughput benefit. Transaction ordering also matters (disputes reference earlier deposits), so parallelism would add complexity without correctness guarantees. If the engine later grew an HTTP API or a real database backend, async would become justified.
