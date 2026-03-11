@@ -1,15 +1,19 @@
-use crate::ports::{AccountRepository, TransactionRepository};
+use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
 
-pub struct DisputeUseCase<A: AccountRepository, T: TransactionRepository> {
+pub struct DisputeUseCase<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> {
     account_repo: A,
     tx_repo: T,
+    dispute_repo: D,
 }
 
-impl<A: AccountRepository, T: TransactionRepository> DisputeUseCase<A, T> {
-    pub fn new(account_repo: A, tx_repo: T) -> Self {
+impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
+    DisputeUseCase<A, T, D>
+{
+    pub fn new(account_repo: A, tx_repo: T, dispute_repo: D) -> Self {
         Self {
             account_repo,
             tx_repo,
+            dispute_repo,
         }
     }
 
@@ -32,10 +36,15 @@ impl<A: AccountRepository, T: TransactionRepository> DisputeUseCase<A, T> {
         account.available = account.available - disputed_amount;
         account.held = account.held + disputed_amount;
         self.account_repo.save(account);
+        self.dispute_repo.mark_disputed(tx_id);
     }
 
     pub fn account_repo(&self) -> &A {
         &self.account_repo
+    }
+
+    pub fn dispute_repo(&self) -> &D {
+        &self.dispute_repo
     }
 }
 
@@ -44,8 +53,9 @@ mod tests {
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::{Transaction, TransactionType};
-    use crate::ports::{AccountRepository, TransactionRepository};
+    use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
     use std::collections::HashMap;
+    use std::collections::HashSet;
 
     struct InMemoryAccountRepo {
         accounts: HashMap<u16, Account>,
@@ -95,6 +105,32 @@ mod tests {
         }
     }
 
+    struct InMemoryDisputeRepo {
+        disputed: HashSet<u32>,
+    }
+
+    impl InMemoryDisputeRepo {
+        fn new() -> Self {
+            Self {
+                disputed: HashSet::new(),
+            }
+        }
+    }
+
+    impl DisputeRepository for InMemoryDisputeRepo {
+        fn is_disputed(&self, tx_id: u32) -> bool {
+            self.disputed.contains(&tx_id)
+        }
+
+        fn mark_disputed(&mut self, tx_id: u32) {
+            self.disputed.insert(tx_id);
+        }
+
+        fn remove_dispute(&mut self, tx_id: u32) {
+            self.disputed.remove(&tx_id);
+        }
+    }
+
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
     }
@@ -117,13 +153,39 @@ mod tests {
             amount: Some(amount("30.0")),
         });
 
-        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        let dispute_repo = InMemoryDisputeRepo::new();
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 42);
 
         let account = use_case.account_repo().get(1).unwrap();
         assert_eq!(account.available, amount("70.0"));
         assert_eq!(account.held, amount("30.0"));
         assert_eq!(account.total(), amount("100.0"));
+    }
+
+    #[test]
+    fn marks_transaction_as_disputed() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("100.0"),
+            held: Amount::ZERO,
+            locked: false,
+        });
+
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("30.0")),
+        });
+
+        let dispute_repo = InMemoryDisputeRepo::new();
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
+        use_case.execute(1, 42);
+
+        assert!(use_case.dispute_repo().is_disputed(42));
     }
 
     #[test]
@@ -136,8 +198,9 @@ mod tests {
             locked: false,
         });
         let tx_repo = InMemoryTransactionRepo::new();
+        let dispute_repo = InMemoryDisputeRepo::new();
 
-        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 999);
 
         let account = use_case.account_repo().get(1).unwrap();
@@ -155,8 +218,9 @@ mod tests {
             tx: 42,
             amount: Some(amount("30.0")),
         });
+        let dispute_repo = InMemoryDisputeRepo::new();
 
-        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 42);
         // no panic = pass
     }
@@ -177,8 +241,9 @@ mod tests {
             tx: 7,
             amount: Some(amount("25.0")),
         });
+        let dispute_repo = InMemoryDisputeRepo::new();
 
-        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 7);
 
         let account = use_case.account_repo().get(1).unwrap();
