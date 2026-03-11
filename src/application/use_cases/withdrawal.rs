@@ -1,6 +1,6 @@
 use crate::domain::amount::Amount;
 use crate::domain::transaction::{Transaction, TransactionType};
-use crate::ports::{AccountRepository, TransactionRepository};
+use crate::ports::{AccountRepository, TransactionRepository, Withdraw};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -56,6 +56,17 @@ impl<A: AccountRepository, T: TransactionRepository> WithdrawalUseCase<A, T> {
 
     pub fn tx_repo(&self) -> &T {
         &self.tx_repo
+    }
+}
+
+impl<A: AccountRepository, T: TransactionRepository> Withdraw for WithdrawalUseCase<A, T> {
+    fn execute(
+        &mut self,
+        client_id: u16,
+        tx: u32,
+        amount: Amount,
+    ) -> Result<(), WithdrawalError> {
+        self.execute(client_id, tx, amount)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::domain::account::Account;
 use crate::domain::amount::Amount;
 use crate::domain::transaction::{Transaction, TransactionType};
-use crate::ports::{AccountRepository, TransactionRepository};
+use crate::ports::{AccountRepository, Deposit, TransactionRepository};
 
 pub struct DepositUseCase<A: AccountRepository, T: TransactionRepository> {
     account_repo: A,
@@ -16,14 +16,14 @@ impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
         }
     }
 
-    pub fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) {
+    pub fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Account {
         let mut account = self
             .account_repo
             .find_by_client_id(client_id)
             .unwrap_or_else(|| Account::new(client_id));
 
         account.available = account.available + amount;
-        self.account_repo.save(account);
+        self.account_repo.save(account.clone());
 
         self.tx_repo.save(Transaction {
             tx_type: TransactionType::Deposit,
@@ -31,6 +31,8 @@ impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
             tx,
             amount: Some(amount),
         });
+
+        account
     }
 
     pub fn repo(&self) -> &A {
@@ -39,6 +41,12 @@ impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
 
     pub fn tx_repo(&self) -> &T {
         &self.tx_repo
+    }
+}
+
+impl<A: AccountRepository, T: TransactionRepository> Deposit for DepositUseCase<A, T> {
+    fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) -> Account {
+        self.execute(client_id, tx, amount)
     }
 }
 

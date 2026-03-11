@@ -1,4 +1,5 @@
-use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
+use crate::domain::account::Account;
+use crate::ports::{AccountRepository, DisputeRepository, DisputeTx, TransactionRepository};
 
 pub struct DisputeUseCase<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> {
     account_repo: A,
@@ -17,26 +18,16 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
         }
     }
 
-    pub fn execute(&mut self, client_id: u16, tx_id: u32) {
-        let tx = match self.tx_repo.find_by_tx_id(tx_id) {
-            Some(tx) => tx,
-            None => return,
-        };
-
-        let mut account = match self.account_repo.find_by_client_id(client_id) {
-            Some(account) => account,
-            None => return,
-        };
-
-        let disputed_amount = match tx.amount {
-            Some(a) => a,
-            None => return,
-        };
+    pub fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account> {
+        let tx = self.tx_repo.find_by_tx_id(tx_id)?;
+        let mut account = self.account_repo.find_by_client_id(client_id)?;
+        let disputed_amount = tx.amount?;
 
         account.available = account.available - disputed_amount;
         account.held = account.held + disputed_amount;
-        self.account_repo.save(account);
+        self.account_repo.save(account.clone());
         self.dispute_repo.mark_disputed(tx_id);
+        Some(account)
     }
 
     pub fn account_repo(&self) -> &A {
@@ -45,6 +36,14 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
 
     pub fn dispute_repo(&self) -> &D {
         &self.dispute_repo
+    }
+}
+
+impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> DisputeTx
+    for DisputeUseCase<A, T, D>
+{
+    fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account> {
+        self.execute(client_id, tx_id)
     }
 }
 
