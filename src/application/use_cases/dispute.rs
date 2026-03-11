@@ -125,4 +125,65 @@ mod tests {
         assert_eq!(account.held, amount("30.0"));
         assert_eq!(account.total(), amount("100.0"));
     }
+
+    #[test]
+    fn ignores_non_existent_transaction() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("100.0"),
+            held: Amount::ZERO,
+            locked: false,
+        });
+        let tx_repo = InMemoryTransactionRepo::new();
+
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        use_case.execute(1, 999);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("100.0"));
+        assert_eq!(account.held, Amount::ZERO);
+    }
+
+    #[test]
+    fn ignores_non_existent_account() {
+        let account_repo = InMemoryAccountRepo::new();
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 42,
+            amount: Some(amount("30.0")),
+        });
+
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        use_case.execute(1, 42);
+        // no panic = pass
+    }
+
+    #[test]
+    fn total_funds_unchanged_with_existing_held() {
+        let mut account_repo = InMemoryAccountRepo::new();
+        account_repo.save(Account {
+            client: 1,
+            available: amount("200.0"),
+            held: amount("50.0"),
+            locked: false,
+        });
+        let mut tx_repo = InMemoryTransactionRepo::new();
+        tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx: 7,
+            amount: Some(amount("25.0")),
+        });
+
+        let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo);
+        use_case.execute(1, 7);
+
+        let account = use_case.account_repo().get(1).unwrap();
+        assert_eq!(account.available, amount("175.0"));
+        assert_eq!(account.held, amount("75.0"));
+        assert_eq!(account.total(), amount("250.0"));
+    }
 }
