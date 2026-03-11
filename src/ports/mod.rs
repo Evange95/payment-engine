@@ -12,8 +12,8 @@ pub trait AccountRepository {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionRepository {
-    fn find_by_tx_id(&self, tx_id: u32) -> Option<crate::domain::transaction::Transaction>;
-    fn save(&mut self, transaction: crate::domain::transaction::Transaction);
+    fn find_by_tx_id(&self, tx_id: u32) -> Option<Transaction>;
+    fn save(&mut self, transaction: Transaction);
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -52,9 +52,6 @@ pub trait Resolve {
 pub trait Chargeback {
     fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
 }
-
-#[allow(dead_code)]
-pub trait TransactionReader: Iterator<Item = Transaction> {}
 
 pub trait AccountWriter {
     fn write_all(&mut self, accounts: &[Account]) -> Result<(), io::Error>;

@@ -1,6 +1,5 @@
 use crate::domain::amount::Amount;
 use crate::domain::transaction::{Transaction, TransactionType};
-use crate::ports::TransactionReader;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -54,15 +53,17 @@ impl<R: std::io::Read> Iterator for CsvTransactionReader<R> {
 
     fn next(&mut self) -> Option<Transaction> {
         loop {
-            let row: CsvRow = self.reader.deserialize().next()?.ok()?;
+            let result = self.reader.deserialize::<CsvRow>().next()?;
+            let row = match result {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
             if let Some(tx) = parse_row(row) {
                 return Some(tx);
             }
         }
     }
 }
-
-impl<R: std::io::Read> TransactionReader for CsvTransactionReader<R> {}
 
 #[cfg(test)]
 mod tests {
@@ -124,6 +125,18 @@ mod tests {
         assert_eq!(txs[0].client, 1);
         assert_eq!(txs[0].tx, 1);
         assert_eq!(txs[0].amount, Some(amount("1.0")));
+    }
+
+    #[test]
+    fn skips_malformed_csv_rows() {
+        let csv = "type,client,tx,amount\ndeposit,1,1,1.0\nnot,a,valid,row\ndeposit,2,2,2.0\n";
+        let reader = super::CsvTransactionReader::new(csv.as_bytes());
+
+        let txs: Vec<_> = reader.collect();
+
+        assert_eq!(txs.len(), 2);
+        assert_eq!(txs[0].client, 1);
+        assert_eq!(txs[1].client, 2);
     }
 
     #[test]
