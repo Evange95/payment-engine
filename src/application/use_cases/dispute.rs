@@ -29,14 +29,6 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
         self.dispute_repo.mark_disputed(tx_id);
         Some(account)
     }
-
-    pub fn account_repo(&self) -> &A {
-        &self.account_repo
-    }
-
-    pub fn dispute_repo(&self) -> &D {
-        &self.dispute_repo
-    }
 }
 
 impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> DisputeTx
@@ -49,13 +41,10 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> Dispu
 
 #[cfg(test)]
 mod tests {
-    use crate::adapters::in_memory_account_repo::InMemoryAccountRepo;
-    use crate::adapters::in_memory_dispute_repo::InMemoryDisputeRepo;
-    use crate::adapters::in_memory_transaction_repo::InMemoryTransactionRepo;
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::{Transaction, TransactionType};
-    use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
+    use crate::ports::{MockAccountRepository, MockDisputeRepository, MockTransactionRepository};
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
@@ -63,27 +52,33 @@ mod tests {
 
     #[test]
     fn moves_funds_from_available_to_held() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("100.0"),
-            held: Amount::ZERO,
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("100.0"),
+                held: Amount::ZERO,
+                locked: false,
+            })
+        });
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
         });
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
-        });
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_mark_disputed().returning(|_| ());
 
-        let dispute_repo = InMemoryDisputeRepo::new();
         let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 42);
+        let account = use_case.execute(1, 42).unwrap();
 
-        let account = use_case.account_repo().get(1).unwrap();
         assert_eq!(account.available, amount("70.0"));
         assert_eq!(account.held, amount("30.0"));
         assert_eq!(account.total(), amount("100.0"));
@@ -91,88 +86,117 @@ mod tests {
 
     #[test]
     fn marks_transaction_as_disputed() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("100.0"),
-            held: Amount::ZERO,
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("100.0"),
+                held: Amount::ZERO,
+                locked: false,
+            })
+        });
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
         });
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
-        });
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo
+            .expect_mark_disputed()
+            .with(mockall::predicate::eq(42))
+            .times(1)
+            .returning(|_| ());
 
-        let dispute_repo = InMemoryDisputeRepo::new();
         let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 42);
-
-        assert!(use_case.dispute_repo().is_disputed(42));
     }
 
     #[test]
     fn ignores_non_existent_transaction() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("100.0"),
-            held: Amount::ZERO,
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("100.0"),
+                held: Amount::ZERO,
+                locked: false,
+            })
         });
-        let tx_repo = InMemoryTransactionRepo::new();
-        let dispute_repo = InMemoryDisputeRepo::new();
+        account_repo.expect_save().times(0);
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
+
+        let dispute_repo = MockDisputeRepository::new();
 
         let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 999);
+        let result = use_case.execute(1, 999);
 
-        let account = use_case.account_repo().get(1).unwrap();
-        assert_eq!(account.available, amount("100.0"));
-        assert_eq!(account.held, Amount::ZERO);
+        assert!(result.is_none());
     }
 
     #[test]
     fn ignores_non_existent_account() {
-        let account_repo = InMemoryAccountRepo::new();
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| None);
+        account_repo.expect_save().times(0);
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
         });
-        let dispute_repo = InMemoryDisputeRepo::new();
+
+        let dispute_repo = MockDisputeRepository::new();
 
         let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 42);
-        // no panic = pass
+        let result = use_case.execute(1, 42);
+
+        assert!(result.is_none());
     }
 
     #[test]
     fn total_funds_unchanged_with_existing_held() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("200.0"),
-            held: amount("50.0"),
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("200.0"),
+                held: amount("50.0"),
+                locked: false,
+            })
         });
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 7,
-            amount: Some(amount("25.0")),
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 7,
+                amount: Some(amount("25.0")),
+            })
         });
-        let dispute_repo = InMemoryDisputeRepo::new();
+
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_mark_disputed().returning(|_| ());
 
         let mut use_case = super::DisputeUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 7);
+        let account = use_case.execute(1, 7).unwrap();
 
-        let account = use_case.account_repo().get(1).unwrap();
         assert_eq!(account.available, amount("175.0"));
         assert_eq!(account.held, amount("75.0"));
         assert_eq!(account.total(), amount("250.0"));

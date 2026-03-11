@@ -15,9 +15,6 @@ impl InMemoryTransactionRepo {
         }
     }
 
-    pub fn get(&self, tx_id: u32) -> Option<&Transaction> {
-        self.transactions.get(&tx_id)
-    }
 }
 
 impl TransactionRepository for InMemoryTransactionRepo {

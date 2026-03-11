@@ -35,14 +35,6 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository>
         self.dispute_repo.remove_dispute(tx_id);
         Some(account)
     }
-
-    pub fn account_repo(&self) -> &A {
-        &self.account_repo
-    }
-
-    pub fn dispute_repo(&self) -> &D {
-        &self.dispute_repo
-    }
 }
 
 impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> Chargeback
@@ -55,13 +47,10 @@ impl<A: AccountRepository, T: TransactionRepository, D: DisputeRepository> Charg
 
 #[cfg(test)]
 mod tests {
-    use crate::adapters::in_memory_account_repo::InMemoryAccountRepo;
-    use crate::adapters::in_memory_dispute_repo::InMemoryDisputeRepo;
-    use crate::adapters::in_memory_transaction_repo::InMemoryTransactionRepo;
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::{Transaction, TransactionType};
-    use crate::ports::{AccountRepository, DisputeRepository, TransactionRepository};
+    use crate::ports::{MockAccountRepository, MockDisputeRepository, MockTransactionRepository};
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
@@ -69,29 +58,34 @@ mod tests {
 
     #[test]
     fn withdraws_held_funds_and_freezes_account() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("70.0"),
-            held: amount("30.0"),
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("70.0"),
+                held: amount("30.0"),
+                locked: false,
+            })
+        });
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
         });
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
-        });
-
-        let mut dispute_repo = InMemoryDisputeRepo::new();
-        dispute_repo.mark_disputed(42);
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| true);
+        dispute_repo.expect_remove_dispute().returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 42);
+        let account = use_case.execute(1, 42).unwrap();
 
-        let account = use_case.account_repo().get(1).unwrap();
         assert_eq!(account.available, amount("70.0"));
         assert_eq!(account.held, Amount::ZERO);
         assert_eq!(account.total(), amount("70.0"));
@@ -100,79 +94,67 @@ mod tests {
 
     #[test]
     fn ignores_non_disputed_transaction() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("70.0"),
-            held: amount("30.0"),
-            locked: false,
-        });
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_save().times(0);
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
-        });
+        let tx_repo = MockTransactionRepository::new();
 
-        let dispute_repo = InMemoryDisputeRepo::new(); // not disputed
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| false);
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 42);
+        let result = use_case.execute(1, 42);
 
-        let account = use_case.account_repo().get(1).unwrap();
-        assert_eq!(account.available, amount("70.0"));
-        assert_eq!(account.held, amount("30.0"));
-        assert!(!account.locked);
+        assert!(result.is_none());
     }
 
     #[test]
     fn ignores_non_existent_transaction() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("70.0"),
-            held: amount("30.0"),
-            locked: false,
-        });
-        let tx_repo = InMemoryTransactionRepo::new();
-        let dispute_repo = InMemoryDisputeRepo::new();
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_save().times(0);
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| None);
+
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| true);
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 999);
+        let result = use_case.execute(1, 999);
 
-        let account = use_case.account_repo().get(1).unwrap();
-        assert_eq!(account.available, amount("70.0"));
-        assert_eq!(account.held, amount("30.0"));
-        assert!(!account.locked);
+        assert!(result.is_none());
     }
 
     #[test]
     fn total_funds_decrease_by_disputed_amount() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("50.0"),
-            held: amount("80.0"),
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("50.0"),
+                held: amount("80.0"),
+                locked: false,
+            })
+        });
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 10,
+                amount: Some(amount("25.0")),
+            })
         });
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 10,
-            amount: Some(amount("25.0")),
-        });
-
-        let mut dispute_repo = InMemoryDisputeRepo::new();
-        dispute_repo.mark_disputed(10);
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| true);
+        dispute_repo.expect_remove_dispute().returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
-        use_case.execute(1, 10);
+        let account = use_case.execute(1, 10).unwrap();
 
-        let account = use_case.account_repo().get(1).unwrap();
         assert_eq!(account.available, amount("50.0"));
         assert_eq!(account.held, amount("55.0"));
         assert_eq!(account.total(), amount("105.0"));
@@ -181,28 +163,36 @@ mod tests {
 
     #[test]
     fn removes_dispute_after_chargeback() {
-        let mut account_repo = InMemoryAccountRepo::new();
-        account_repo.save(Account {
-            client: 1,
-            available: amount("70.0"),
-            held: amount("30.0"),
-            locked: false,
+        let mut account_repo = MockAccountRepository::new();
+        account_repo.expect_find_by_client_id().returning(|_| {
+            Some(Account {
+                client: 1,
+                available: amount("70.0"),
+                held: amount("30.0"),
+                locked: false,
+            })
+        });
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_find_by_tx_id().returning(|_| {
+            Some(Transaction {
+                tx_type: TransactionType::Deposit,
+                client: 1,
+                tx: 42,
+                amount: Some(amount("30.0")),
+            })
         });
 
-        let mut tx_repo = InMemoryTransactionRepo::new();
-        tx_repo.save(Transaction {
-            tx_type: TransactionType::Deposit,
-            client: 1,
-            tx: 42,
-            amount: Some(amount("30.0")),
-        });
-
-        let mut dispute_repo = InMemoryDisputeRepo::new();
-        dispute_repo.mark_disputed(42);
+        let mut dispute_repo = MockDisputeRepository::new();
+        dispute_repo.expect_is_disputed().returning(|_| true);
+        dispute_repo
+            .expect_remove_dispute()
+            .with(mockall::predicate::eq(42))
+            .times(1)
+            .returning(|_| ());
 
         let mut use_case = super::ChargebackUseCase::new(account_repo, tx_repo, dispute_repo);
         use_case.execute(1, 42);
-
-        assert!(!use_case.dispute_repo().is_disputed(42));
     }
 }

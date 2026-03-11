@@ -11,14 +11,6 @@ pub struct Amount(i64);
 impl Amount {
     pub const ZERO: Self = Self(0);
 
-    pub fn from_raw(raw: i64) -> Self {
-        Self(raw)
-    }
-
-    pub fn raw(&self) -> i64 {
-        self.0
-    }
-
     pub fn is_negative(&self) -> bool {
         self.0 < 0
     }

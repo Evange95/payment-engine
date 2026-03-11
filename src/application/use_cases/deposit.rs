@@ -34,14 +34,6 @@ impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
 
         account
     }
-
-    pub fn repo(&self) -> &A {
-        &self.account_repo
-    }
-
-    pub fn tx_repo(&self) -> &T {
-        &self.tx_repo
-    }
 }
 
 impl<A: AccountRepository, T: TransactionRepository> Deposit for DepositUseCase<A, T> {
@@ -52,12 +44,9 @@ impl<A: AccountRepository, T: TransactionRepository> Deposit for DepositUseCase<
 
 #[cfg(test)]
 mod tests {
-    use crate::adapters::in_memory_account_repo::InMemoryAccountRepo;
-    use crate::adapters::in_memory_transaction_repo::InMemoryTransactionRepo;
-    use crate::domain::account::Account;
     use crate::domain::amount::Amount;
     use crate::domain::transaction::TransactionType;
-    use crate::ports::AccountRepository;
+    use crate::ports::{MockAccountRepository, MockTransactionRepository};
 
     fn amount(s: &str) -> Amount {
         s.parse().unwrap()
@@ -65,30 +54,43 @@ mod tests {
 
     #[test]
     fn increases_available_and_total() {
-        let mut repo = InMemoryAccountRepo::new();
-        repo.save(Account {
-            client: 1,
-            available: amount("30.0"),
-            held: amount("10.0"),
-            locked: false,
-        });
-        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| {
+                Some(crate::domain::account::Account {
+                    client: 1,
+                    available: amount("30.0"),
+                    held: amount("10.0"),
+                    locked: false,
+                })
+            });
+        account_repo.expect_save().returning(|_| ());
 
-        use_case.execute(1, 1, amount("20.0"));
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_save().returning(|_| ());
 
-        let account = use_case.repo().get(1).unwrap();
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+        let account = use_case.execute(1, 1, amount("20.0"));
+
         assert_eq!(account.available, amount("50.0"));
         assert_eq!(account.total(), amount("60.0"));
     }
 
     #[test]
     fn creates_account_on_first_deposit() {
-        let repo = InMemoryAccountRepo::new();
-        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| None);
+        account_repo.expect_save().returning(|_| ());
 
-        use_case.execute(1, 1, amount("10.0"));
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_save().returning(|_| ());
 
-        let account = use_case.repo().get(1).expect("account should exist");
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+        let account = use_case.execute(1, 1, amount("10.0"));
+
         assert_eq!(account.available, amount("10.0"));
         assert_eq!(account.held, Amount::ZERO);
         assert!(!account.locked);
@@ -96,45 +98,68 @@ mod tests {
 
     #[test]
     fn adds_to_existing_available_balance() {
-        let mut repo = InMemoryAccountRepo::new();
-        repo.save(Account {
-            client: 1,
-            available: amount("50.0"),
-            held: Amount::ZERO,
-            locked: false,
-        });
-        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| {
+                Some(crate::domain::account::Account {
+                    client: 1,
+                    available: amount("50.0"),
+                    held: Amount::ZERO,
+                    locked: false,
+                })
+            });
+        account_repo.expect_save().returning(|_| ());
 
-        use_case.execute(1, 1, amount("25.5"));
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_save().returning(|_| ());
 
-        let account = use_case.repo().get(1).unwrap();
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+        let account = use_case.execute(1, 1, amount("25.5"));
+
         assert_eq!(account.available, amount("75.5"));
     }
 
     #[test]
     fn deposits_to_separate_clients_independently() {
-        let repo = InMemoryAccountRepo::new();
-        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| None);
+        account_repo.expect_save().returning(|_| ());
 
-        use_case.execute(1, 1, amount("100.0"));
-        use_case.execute(2, 2, amount("200.0"));
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo.expect_save().returning(|_| ());
 
-        assert_eq!(use_case.repo().get(1).unwrap().available, amount("100.0"));
-        assert_eq!(use_case.repo().get(2).unwrap().available, amount("200.0"));
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+        let a1 = use_case.execute(1, 1, amount("100.0"));
+        let a2 = use_case.execute(2, 2, amount("200.0"));
+
+        assert_eq!(a1.available, amount("100.0"));
+        assert_eq!(a2.available, amount("200.0"));
     }
 
     #[test]
     fn saves_transaction_record() {
-        let account_repo = InMemoryAccountRepo::new();
-        let tx_repo = InMemoryTransactionRepo::new();
+        let mut account_repo = MockAccountRepository::new();
+        account_repo
+            .expect_find_by_client_id()
+            .returning(|_| None);
+        account_repo.expect_save().returning(|_| ());
+
+        let mut tx_repo = MockTransactionRepository::new();
+        tx_repo
+            .expect_save()
+            .withf(|tx| {
+                tx.tx_type == TransactionType::Deposit
+                    && tx.client == 1
+                    && tx.tx == 42
+                    && tx.amount == Some("10.0".parse().unwrap())
+            })
+            .times(1)
+            .returning(|_| ());
+
         let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
-
         use_case.execute(1, 42, amount("10.0"));
-
-        let tx = use_case.tx_repo().get(42).expect("transaction should be saved");
-        assert_eq!(tx.tx_type, TransactionType::Deposit);
-        assert_eq!(tx.client, 1);
-        assert_eq!(tx.tx, 42);
-        assert_eq!(tx.amount, Some(amount("10.0")));
     }
 }
