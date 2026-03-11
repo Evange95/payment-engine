@@ -53,6 +53,7 @@ pub trait Chargeback {
     fn execute(&mut self, client_id: u16, tx_id: u32) -> Option<Account>;
 }
 
+#[allow(dead_code)]
 pub trait TransactionReader: Iterator<Item = Transaction> {}
 
 pub trait AccountWriter {
