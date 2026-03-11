@@ -1,17 +1,22 @@
 use crate::domain::account::Account;
 use crate::domain::amount::Amount;
-use crate::ports::AccountRepository;
+use crate::domain::transaction::{Transaction, TransactionType};
+use crate::ports::{AccountRepository, TransactionRepository};
 
-pub struct DepositUseCase<R: AccountRepository> {
-    account_repo: R,
+pub struct DepositUseCase<A: AccountRepository, T: TransactionRepository> {
+    account_repo: A,
+    tx_repo: T,
 }
 
-impl<R: AccountRepository> DepositUseCase<R> {
-    pub fn new(account_repo: R) -> Self {
-        Self { account_repo }
+impl<A: AccountRepository, T: TransactionRepository> DepositUseCase<A, T> {
+    pub fn new(account_repo: A, tx_repo: T) -> Self {
+        Self {
+            account_repo,
+            tx_repo,
+        }
     }
 
-    pub fn execute(&mut self, client_id: u16, amount: Amount) {
+    pub fn execute(&mut self, client_id: u16, tx: u32, amount: Amount) {
         let mut account = self
             .account_repo
             .find_by_client_id(client_id)
@@ -19,10 +24,21 @@ impl<R: AccountRepository> DepositUseCase<R> {
 
         account.available = account.available + amount;
         self.account_repo.save(account);
+
+        self.tx_repo.save(Transaction {
+            tx_type: TransactionType::Deposit,
+            client: client_id,
+            tx,
+            amount: Some(amount),
+        });
     }
 
-    pub fn repo(&self) -> &R {
+    pub fn repo(&self) -> &A {
         &self.account_repo
+    }
+
+    pub fn tx_repo(&self) -> &T {
+        &self.tx_repo
     }
 }
 
@@ -30,7 +46,8 @@ impl<R: AccountRepository> DepositUseCase<R> {
 mod tests {
     use crate::domain::account::Account;
     use crate::domain::amount::Amount;
-    use crate::ports::AccountRepository;
+    use crate::domain::transaction::{Transaction, TransactionType};
+    use crate::ports::{AccountRepository, TransactionRepository};
     use std::collections::HashMap;
 
     struct InMemoryAccountRepo {
@@ -72,9 +89,9 @@ mod tests {
             held: amount("10.0"),
             locked: false,
         });
-        let mut use_case = super::DepositUseCase::new(repo);
+        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
 
-        use_case.execute(1, amount("20.0"));
+        use_case.execute(1, 1, amount("20.0"));
 
         let account = use_case.repo().get(1).unwrap();
         assert_eq!(account.available, amount("50.0"));
@@ -84,9 +101,9 @@ mod tests {
     #[test]
     fn creates_account_on_first_deposit() {
         let repo = InMemoryAccountRepo::new();
-        let mut use_case = super::DepositUseCase::new(repo);
+        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
 
-        use_case.execute(1, amount("10.0"));
+        use_case.execute(1, 1, amount("10.0"));
 
         let account = use_case.repo().get(1).expect("account should exist");
         assert_eq!(account.available, amount("10.0"));
@@ -103,9 +120,9 @@ mod tests {
             held: Amount::ZERO,
             locked: false,
         });
-        let mut use_case = super::DepositUseCase::new(repo);
+        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
 
-        use_case.execute(1, amount("25.5"));
+        use_case.execute(1, 1, amount("25.5"));
 
         let account = use_case.repo().get(1).unwrap();
         assert_eq!(account.available, amount("75.5"));
@@ -114,12 +131,53 @@ mod tests {
     #[test]
     fn deposits_to_separate_clients_independently() {
         let repo = InMemoryAccountRepo::new();
-        let mut use_case = super::DepositUseCase::new(repo);
+        let mut use_case = super::DepositUseCase::new(repo, InMemoryTransactionRepo::new());
 
-        use_case.execute(1, amount("100.0"));
-        use_case.execute(2, amount("200.0"));
+        use_case.execute(1, 1, amount("100.0"));
+        use_case.execute(2, 2, amount("200.0"));
 
         assert_eq!(use_case.repo().get(1).unwrap().available, amount("100.0"));
         assert_eq!(use_case.repo().get(2).unwrap().available, amount("200.0"));
+    }
+
+    struct InMemoryTransactionRepo {
+        transactions: HashMap<u32, Transaction>,
+    }
+
+    impl InMemoryTransactionRepo {
+        fn new() -> Self {
+            Self {
+                transactions: HashMap::new(),
+            }
+        }
+
+        fn get(&self, tx_id: u32) -> Option<&Transaction> {
+            self.transactions.get(&tx_id)
+        }
+    }
+
+    impl TransactionRepository for InMemoryTransactionRepo {
+        fn find_by_tx_id(&self, tx_id: u32) -> Option<Transaction> {
+            self.transactions.get(&tx_id).cloned()
+        }
+
+        fn save(&mut self, transaction: Transaction) {
+            self.transactions.insert(transaction.tx, transaction);
+        }
+    }
+
+    #[test]
+    fn saves_transaction_record() {
+        let account_repo = InMemoryAccountRepo::new();
+        let tx_repo = InMemoryTransactionRepo::new();
+        let mut use_case = super::DepositUseCase::new(account_repo, tx_repo);
+
+        use_case.execute(1, 42, amount("10.0"));
+
+        let tx = use_case.tx_repo().get(42).expect("transaction should be saved");
+        assert_eq!(tx.tx_type, TransactionType::Deposit);
+        assert_eq!(tx.client, 1);
+        assert_eq!(tx.tx, 42);
+        assert_eq!(tx.amount, Some(amount("10.0")));
     }
 }
